@@ -1,0 +1,25 @@
+pipeline {
+  agent any
+  environment { IMAGE = "yourdockerid/my-java-app" }
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Build JAR') { steps { sh 'mvn -B -DskipTests package' } }
+    stage('Build & Push Image') {
+      steps {
+        script {
+          def tag = "${env.BUILD_NUMBER}"
+          def full = "${IMAGE}:${tag}"
+          sh "docker build -t ${full} ."
+          withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+            sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+            sh "docker push ${full}"
+            sh "docker tag ${full} ${IMAGE}:latest"
+            sh "docker push ${IMAGE}:latest"
+            sh 'docker logout'
+          }
+        }
+      }
+    }
+  }
+  post { always { cleanWs() } }
+}
